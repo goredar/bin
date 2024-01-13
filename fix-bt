@@ -1,0 +1,10 @@
+BTID=$(rfkill | grep bluetooth | cut -f 2 -d ' ' | tail -n 1)
+sudo rfkill block $BTID
+sudo rfkill unblock $BTID
+sleep 1
+sudo systemctl restart bluetooth
+pkill pulseaudio
+sleep 1
+pacmd set-card-profile \
+  $(pacmd list-cards | ruby -e 'ARGF.read =~ /index: (\d)(?=\s*name: <bluez)/m && print($1)') \
+  a2dp_sink

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+subnet=${SUBNET:-131}
+interface=${INTERFACE:-enp46s0}
+internet=${INTERNAT:-wlp45s0}
+braddress=10.10.$subnet.254
+
+sudo ip addr del "$braddress/24" dev "$interface"
+sudo ip addr add "$braddress/24" dev "$interface"
+sudo iptables -t nat -A POSTROUTING -o "$internet" -j MASQUERADE
+
+sudo dnsmasq --no-daemon \
+  --except-interface=lo \
+  --listen-address="$braddress" \
+  --interface="$interface" \
+  --bind-dynamic \
+  --pid-file="/tmp/dnsmasq-$interface-$subnet.pid" \
+  --dhcp-range="10.10.$subnet.10,10.10.$subnet.253" \
+  --dhcp-option="3,$braddress" \
+  --dhcp-option="6,$braddress"

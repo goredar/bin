@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+
+import yaml
+import os
+import subprocess
+import sys
+import re
+import glob
+import paramiko
+
+SC_DIR = "/home/goredar/devops/staging_configs"
+
+MQ_FILES_PATTERN = re.compile(r'amqp_.*\.yaml')
+#PATTERN = re.compile(sys.argv[1])
+#EXCLUDE = re.compile(sys.argv[2])
+
+sample_yaml = '/home/goredar/devops/staging_configs/amqp_by0.yaml'
+test_yaml = '/tmp/test.yaml'
+
+with open(test_yaml, 'w') as file:
+    yaml.dump(yaml.load(open(sample_yaml).read()), stream=file, default_flow_style=False, indent=4)
+
+print("colordiff -y {} {}".format(sample_yaml, test_yaml))

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+export DISPLAY=:0.0
+export DBUS_SESSION_BUS_ADDRESS=$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/$(pidof i3bar)/environ | tr '\0' '\n' | cut -d= -f2-)
+
+setxkbmap -layout 'us,ru(winkeys)' -option 'grp:alt_space_toggle,grp_led:caps,terminate:ctrl_alt_bksp,ctrl:ralt_rctrl'
+xmodmap ~/.Xmodmap
+
+# autocutsel -fork &
+# autocutsel -selection PRIMARY -fork &

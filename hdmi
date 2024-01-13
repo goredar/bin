@@ -1,0 +1,11 @@
+case $1 in
+  on)
+    xrandr --output eDP1 --auto --output HDMI2 --auto --scale-from 1920x1080
+    ;;
+  off)
+    xrandr --output eDP1 --auto --output HDMI2 --off
+    ;;
+  *)
+    echo 'usage: on|off'
+    ;;
+esac

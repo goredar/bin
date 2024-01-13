@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+
+require 'securerandom'
+
+workdir = File.expand_path(ARGV[0] || "./")
+tempdir = File.expand_path workdir, SecureRandom.hex
+
+Dir["#{workdir}/**/*.mp3"].shuffle.each_with_index do |name, index|
+  File.basename(name) =~ /^(.*?\d+[\.\-\s_]+)?(.*?)(\(.*\))*\.mp3$/
+  new_name = File.expand_path "#{sprintf("%04d", index)}_#{$2.tr(' ', '_').squeeze('_').chomp('_')}.mp3", File.dirname(name)
+  File.rename name, new_name
+end

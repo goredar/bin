@@ -1,0 +1,18 @@
+#!/bin/bash
+
+FROMDBNAME=$1
+FROMHOST=$2
+TODBNAME=$3
+TOHOST=$4
+
+echo "Copy ${FROMDBNAME}:${FROMHOST} to ${TODBNAME}:${TOHOST}"
+
+[[ -z "${FROMDBNAME}" ]] && exit 1
+[[ -z "${TODBNAME}" ]] && exit 1
+[[ -z "${FROMHOST}" ]] && exit 1
+[[ -z "${TOHOST}" ]] && exit 1
+
+pg_dump --schema=public -h ${FROMHOST} -W -U ${FROMDBNAME} ${FROMDBNAME} > ~/tmp/tmp.sql
+[[ ${FROMDBNAME} -eq ${TODBNAME} ]] || sed s:${FROMDBNAME}:${TODBNAME}:g ~/tmp/tmp.sql -i
+psql -h ${TOHOST} -W -U ${TODBNAME} ${TODBNAME} < ~/tmp/tmp.sql
+rm ~/tmp/tmp.sql

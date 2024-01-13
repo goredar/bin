@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+################## requeried keyring module ( pip install keyring ) ##################
+import json
+import os
+import re
+import sys
+import time
+from getpass import getpass
+
+import keyring
+import requests
+
+fargv = len(sys.argv) > 1
+if fargv and sys.argv[1] in ["-h", "--help", "help", "-?", "?"]:
+    print("Usage: " + sys.argv[0] + " [[<username as e-mail>] [<password>]]")
+    exit(0)
+
+uname = sys.argv[1] if fargv else input("Username: ")
+upass = keyring.get_password("kubectl/password", uname)
+if not upass:
+    upass = getpass("Password: ")
+    keyring.set_password("kubectl/password", uname, upass)
+
+fmeta = os.environ.get("HOME") + "/.kube/meta_" + uname + ".json"
+meta = {}
+if os.path.isfile(fmeta):
+    with open(fmeta) as f:
+        meta = json.load(f)
+
+token = keyring.get_password("kubectl/token", uname)
+if not token or meta.get("exp", 0) < time.time() - 90:
+    r = requests.get("https://console.k8s.gw.tc/login/ed-ks1")
+    r.encoding = "UTF-8"
+    erq = re.search(r'"(\/auth\/WG_LDAP\?req=\S*)"', r.text).group(1)
+    login = {"login": uname, "password": upass}
+    url = "https://login.k8s.gw.tc" + erq
+    x = requests.post(url, data=login)
+    data = re.sub("\s+", " ", x.text.replace("&#34;", '"'))
+    __import__("pprint").pprint(data)
+    token = re.search(r"id-token=(\S*)<\/code>", data).group(1)
+    keyring.set_password("kubectl/token", uname, token)
+    meta = json.loads(
+        "{"
+        + (
+            re.search(
+                r"<div\s+class=\"groups\">\s*<pre>\s*<code>\s*{\s+(.*)\s+}\s*</code>\s*</pre>\s*</div>",
+                data,
+            ).group(1)
+        )
+        + "}"
+    )
+    with open(fmeta, "w") as f:
+        json.dump(meta, f)
+
+ret = {
+    "apiVersion": "client.authentication.k8s.io/v1beta1",
+    "kind": "ExecCredential",
+    "status": {"token": token},
+}
+print(json.dumps(ret))

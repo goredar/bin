@@ -1,0 +1,28 @@
+#!/bin/sh
+
+function rm_virt_modules {
+    sudo rmmod $(lsmod | grep kvm | cut -d' ' -f1) 2>&-
+    sudo rmmod $(lsmod | grep vbox | cut -d' ' -f1) 2>&-
+    sudo rmmod $(lsmod | grep virtio | cut -d' ' -f1) 2>&-
+}
+
+case $1 in
+    kvm)
+      rm_virt_modules
+      sudo modprobe kvm_intel nested=1
+      for x in virtio-net virtio-blk virtio-scsi virtio-balloon vhost_net; do
+        sudo modprobe "$x"
+      done
+      echo "KVM modules have been loaded:"
+      lsmod | grep -E 'vbox|kvm|virtio|vhost'
+      ;;
+    vbox)
+      rm_virt_modules
+      for x in vboxdrv vboxnetadp vboxnetflt vboxpci; do sudo modprobe "$x"; done
+      echo "VirtualBox modules have been loaded:"
+      lsmod | grep -E 'vbox|kvm|virtio|vhost'
+      ;;
+    *)
+      echo "usage: $0 [vbox|kvm]"
+      ;;
+esac

@@ -1,0 +1,8 @@
+#!/usr/bin/python3
+
+import sys
+
+from urllib.parse import quote
+
+print(quote(sys.argv[1]))
+

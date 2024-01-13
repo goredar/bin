@@ -1,0 +1,37 @@
+#!/bin/bash
+
+[ -z "$1" ] && echo "usage: gbridge bridge_name [subnet (0-255)]"
+
+brname=$1
+if [ $2 ]; then
+  subnet=$2
+else
+  sha=$(echo $1 | shasum)
+  sha=${sha:13:2}
+  subnet=$((16#$sha))
+fi
+braddress=10.10.$subnet.254
+net=10.10.$subnet.0/24
+if ip link show $brname 1>&- 2>&-; then
+  echo "[+] Bridge '$brname' already exists"
+else
+  ip link add $brname type bridge
+  echo "[+] Bridge '$brname' has been added"
+  ip addr add $braddress/24 dev $brname
+  echo "[+] IP address '$braddress' has been set"
+  ip link set $brname up
+  echo "[+] Bridge interface has been brought up"
+  iptables -t nat -A POSTROUTING -s $net -j MASQUERADE
+  echo "[+] Iptables rules has been added"
+fi
+echo "[+] Starting dnsmasq server"
+dnsmasq --no-daemon \
+  --except-interface=lo \
+  --listen-address=$braddress \
+  --interface=$brname \
+  --bind-dynamic \
+  --pid-file=/tmp/dnsmasq-$brname.pid \
+  --dhcp-range=10.10.$subnet.10,10.10.$subnet.253 \
+  --dhcp-option=3,$braddress \
+  --dhcp-option=6,$braddress \
+  --dhcp-option=15,$brname.local

@@ -1,0 +1,118 @@
+#!/usr/bin/env ruby
+
+require "yaml"
+require "logger"
+require "colorize"
+require "securerandom"
+
+puts "Usage: db_scp from_db_name from_db_host [to_db_name] to_db_host" unless (3..4).include?(ARGV.size)
+
+@yaml_path = File.expand_path "~/devops/configs/conf"
+SSH_STR = "ssh -o StrictHostKeyChecking=no"
+SEVERITY = {
+  "DEBUG" => "DEBUG".white,
+  "INFO"  => "INFO".green,
+  "ERROR" => "ERROR".red,
+}
+
+def find_db_creds(host, db_name)
+  yaml_file = %x(grep -Pl 'name:\s+#{db_name}' #{@yaml_path}/*dbms*.yaml).chomp
+  puts yaml_file
+  return {} if yaml_file.empty?
+  fqdn =  %x(grep -Po 'host:\s+#{host}[a-z\.]*' #{yaml_file} | tr -d ' \t').split(':')[1]
+  puts fqdn
+  yaml_data = YAML.load(File.read yaml_file)
+  yaml_data.keys.each do |key|
+    yaml_data[key].each do |yaml_db|
+      if yaml_db["host"].chomp == fqdn.chomp
+        yaml_db["databases"].each do |database|
+          if database["name"].chomp == db_name.chomp
+            found_db = database.merge(database.delete("creds")["default"]).merge({"fqdn" => fqdn.chomp, "type" => key})
+            @log.debug { "found #{found_db}" }
+            return found_db
+          end
+        end
+      end
+    end
+  end
+  return {}
+rescue
+  {}
+end
+
+def exit_on_fail(exit_code)
+  exit_code ? @log.info { "Done" } : (@log.erorr { "Failure has occurred" }; exit 1)
+end
+
+@log = Logger.new(STDOUT)
+@log.level = Logger::DEBUG
+@log.formatter = proc do |severity, datetime, progname, msg|
+  "#{datetime.to_s.light_white} #{SEVERITY[severity]}\t#{msg.light_cyan}#{$/}"
+end
+
+from_db_name, from_db_host, to_db_name, to_db_host = *ARGV
+to_db_name, to_db_host = from_db_name, to_db_name unless to_db_host
+
+@log.debug { "input_params[from_db]: #{from_db_name}@#{from_db_host}" }
+@log.debug { "input_params[to_db]: #{to_db_name}@#{to_db_host}" }
+
+from_db = find_db_creds(from_db_host, from_db_name)
+to_db = find_db_creds(to_db_host, to_db_name)
+
+(@log.error { "Couldn't find yaml entry for 'FROM' db" }; exit 1) if from_db.empty?
+(@log.error { "Couldn't find yaml entry for 'TO' db" }; exit 1) if to_db.empty?
+(@log.error { "Databases have different types" }; exit 1) unless from_db["type"] == to_db["type"]
+#(@log.error { "Databases have different names" }; exit 1) unless from_db["name"] == to_db["name"]
+
+@log.info { "Starting copy #{from_db["type"]} db from #{from_db["name"]}@#{from_db["fqdn"]} to #{to_db["name"]}@#{to_db["fqdn"]}" }
+
+tmp_sql_file = "/tmp/#{from_db["name"]}_#{SecureRandom.hex}.sql"
+
+case from_db["type"]
+when "postgres"
+  @log.info { "Dump #{from_db["name"]} db to remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{from_db["fqdn"]} \
+    'PGPASSWORD=#{from_db["password"]} pg_dump --clean -h #{from_db["fqdn"]} -U #{from_db["user"]} #{from_db["name"]} \
+    | #{SSH_STR} acme@#{to_db["fqdn"]} "cat > #{tmp_sql_file}"'
+  )
+  if from_db["name"] != to_db["name"]
+    @log.info { "Renaming db from #{from_db["name"]} to #{to_db["name"]}" }
+    exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} \
+    'sed s:#{from_db["name"]}:#{to_db["name"]}:g -i #{tmp_sql_file}'
+  )
+  end
+  @log.info { "Restore #{to_db["name"]} on remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} \
+    'PGPASSWORD=#{to_db["password"]} psql -h #{to_db["fqdn"]} -U #{to_db["user"]} #{to_db["name"]} < #{tmp_sql_file}'
+  )
+  @log.info { "Removing temporary files on remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} 'rm #{tmp_sql_file}'
+  )
+when "mysql"
+  @log.info { "Dump #{from_db["name"]} db to remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{from_db["fqdn"]} \
+    'MYSQL_PWD=#{from_db["password"]} mysqldump -h #{from_db["fqdn"]} -u #{from_db["user"]} #{from_db["name"]} \
+    | #{SSH_STR} acme@#{to_db["fqdn"]} "cat > #{tmp_sql_file}"'
+  )
+  if from_db["name"] != to_db["name"]
+    @log.info { "Renaming db from #{from_db["name"]} to #{to_db["name"]}" }
+    exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} \
+    'sed s:#{from_db["name"]}:#{to_db["name"]}:g -i #{tmp_sql_file}'
+  )
+  end
+  @log.info { "Restore #{to_db["name"]} on remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} \
+    'MYSQL_PWD=#{to_db["password"]} mysql -h #{to_db["fqdn"]} -u #{to_db["user"]} #{to_db["name"]} < #{tmp_sql_file}'
+  )
+  @log.info { "Removing temporary files on remote server" }
+  exit_on_fail system %(
+    #{SSH_STR} acme@#{to_db["fqdn"]} 'rm #{tmp_sql_file}'
+  )
+end

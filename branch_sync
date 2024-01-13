@@ -1,0 +1,5 @@
+#!/bin/bash
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+git checkout master && git pull -r && git checkout $CURRENT_BRANCH && git rebase master -S && git push --set-upstream origin $CURRENT_BRANCH -f

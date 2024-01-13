@@ -1,0 +1,112 @@
+#!/usr/bin/env ruby
+
+require 'json'
+require 'net/http'
+require 'optparse'
+require 'logger'
+require 'colorize'
+
+HIERA_PATH = '/home/goredar/devops/hiera-backend'
+SEVERITY_MAP = {
+  "DEBUG" => "DBUG",
+  "INFO" => "INFO".blue,
+  "WARN" => "WARN".yellow,
+  "ERROR" => "ERRO".red,
+  "FATAL" => "FATE".on_red,
+  "UNKNOWN" => "UNKN",
+}
+IP_REGEXP = Regexp.compile /(\d{1,3}\.){3}\d{1,3}/
+
+class PowerDNS
+  def self.add_record(opts = {})
+    return unless opts[:name] && opts[:content]
+    opts[:site] ||= :net
+    opts[:dns_host] ||= opts[:site] == :cn ? "ns-cn.acme.io" : "ns.acme.io"
+    opts[:dns_port] ||= "8081"
+    opts[:zone] ||= "acme.io"
+    opts[:api_key] ||= opts[:site] == :cn ? "aaa" : "bbb"
+    opts[:type] ||= opts[:content].first =~ IP_REGEXP ? "A" : "CNAME"
+    opts[:apply] ||= false
+    opts[:name] += ".#{opts[:zone]}" unless opts[:name].end_with? opts[:zone]
+    records = opts[:content].reduce([]) do |rr, record|
+      rr << {
+        "content": record,
+        "disabled": false,
+#        "set-ptr": true,
+        "name": opts[:name],
+        "ttl": 300,
+        "type": opts[:type],
+        "priority": 0,
+      }
+    end
+    rrsets = {
+      "rrsets":
+        [
+          {
+            "name": opts[:name],
+            "type": opts[:type],
+            "changetype": "REPLACE",
+            "records": records
+          }
+        ]
+    }
+    LOG.debug("powerdns") { "options: #{opts}" }
+    LOG.debug("powerdns") { "url: http://#{opts[:dns_host]}:#{opts[:dns_port]}/servers/localhost/zones/#{opts[:zone]}" }
+    LOG.debug("powerdns") { "changeset: #{JSON.dump(rrsets)}" }
+    http = Net::HTTP.new opts[:dns_host], opts[:dns_port]
+    resp = opts[:apply] ? http.patch("/servers/localhost/zones/#{opts[:zone]}", JSON.dump(rrsets), "X-API-Key": opts[:api_key]) : nil
+    resp_code = resp ? resp.code : "200"
+    LOG.debug("powerdns") { "site: #{opts[:site]}, responce code: " + resp_code.yellow }
+    if resp_code == "200"
+      LOG.info("powerdns") { "added #{opts[:type]} record #{opts[:name]} -> #{opts[:content]}" }
+    else
+      LOG.error("powerdns") { "failed to add #{opts[:type]} record #{opts[:name]} -> #{opts[:content]}: #{resp.body}" }
+    end
+  end
+end
+
+options = {}
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: add_dns [options] record content"
+  opts.on("-t", "--type TYPE", "Record type [cname, A]") { |type| options[:type] = type }
+  opts.on("-z", "--zone ZONE", "Zone name [acme.io]") { |zone| options[:zone] = zone }
+  opts.on("-D", "--apply", "Apply changes, overvise it's dry run") { options[:apply] = true }
+  opts.on("--debug", "Print debug info") { options[:debug] = true }
+end
+
+parser.parse!
+
+LOG = Logger.new STDOUT
+LOG.level = options[:debug] ? Logger::DEBUG : Logger::INFO
+LOG.formatter = proc do |severity, datetime, progname, msg|
+  "#{SEVERITY_MAP[severity]}: [#{progname}] #{msg}\n"
+end
+
+if ARGV.size < 2
+  LOG.error("app") { "Wrong number of arguments" }
+  puts parser
+  exit 1
+end
+
+options[:name] = ARGV.shift
+options[:content] = ARGV
+
+ip_addr_only = options[:content].reduce(true) { |memo, value| memo && !(value =~ IP_REGEXP).nil? }
+
+if !ip_addr_only && options[:content].size > 1
+  LOG.error("app") { "Can't combine A record with CNAME or add multiple CNAMEs" }
+  exit 1
+end
+if ip_addr_only && options[:content].size != options[:content].uniq.compact.size
+  LOG.error("app") { "Duplicate A record found" }
+  exit 1
+end
+case ssss
+when sssss
+when sssss
+end
+options[:site] = :net
+PowerDNS.add_record options.dup
+options[:site] = :cn
+PowerDNS.add_record options.dup

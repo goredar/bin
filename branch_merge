@@ -1,0 +1,4 @@
+#!/bin/bash
+
+[[ -z $1 ]] && echo "Please, provide branch name" && exit 1
+git checkout master && git pull -r && git checkout "$1" && git rebase master -S && git checkout master && git merge -S "$1"

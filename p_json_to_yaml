@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+import json
+import yaml
+import sys
+
+lines = ''
+for line in sys.stdin:
+    lines = lines + line
+print(yaml.dump(json.loads(lines)))

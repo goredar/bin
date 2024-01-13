@@ -1,0 +1,16 @@
+#!/bin/bash
+
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+if [[ -z $1 ]]; then
+  files=$(git status -s | awk '{ print $2}' | grep -P '.*\.pp')
+else
+  files=$(find -name *.pp)
+fi
+
+echo -e "${BLUE}Puppet Parser Validate${NC}:"
+for file in $files; do echo $file; puppet parser validate $file; done
+
+echo -e "${BLUE}Puppet Lint${NC}:"
+for file in $files; do echo $file; puppet-lint $file; done

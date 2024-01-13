@@ -1,0 +1,12 @@
+#!/bin/bash
+
+file="$1"
+
+if [ -f "$file" ]; then
+  mkv_file=${file%.*}.mkv
+  ffmpeg -i "$file" -c:v libx265 -c:a aac -crf 27 -threads 4 "$mkv_file" && \
+  touch -r "$file" "$mkv_file" && \
+  rm "$file"
+else
+  echo "Not a file:" $file
+fi

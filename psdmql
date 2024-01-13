@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/
+set -euo pipefail
+IFS=$'\n\t'
+
+STATUS=$(sdm status | grep postgres | tr -s ' ')
+
+DB=$(echo "$STATUS" | cut -f 2,3 -d ' ' | fzf)
+PORT=$(echo "$STATUS" | grep "$DB" | head -1 | cut -f 6 -d ' ')
+
+sdm connect "$DB" >/dev/null
+
+function disconnect {
+  sdm disconnect "$DB" >/dev/null 2>&1
+}
+trap disconnect EXIT
+
+pgcli -h localhost -p $PORT "$@"

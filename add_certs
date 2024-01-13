@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'logger'
+require 'colorize'
+require_relative 'hiera'
+
+
+SEVERITY_MAP = {
+  "DEBUG" => "DBUG",
+  "INFO" => "INFO".blue,
+  "WARN" => "WARN".yellow,
+  "ERROR" => "ERRO".red,
+  "FATAL" => "FATE".on_red,
+  "UNKNOWN" => "UNKN",
+}
+
+options = {
+  :owner => "acme",
+}
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: mover.rb [options] cert list"
+  opts.on("-h", "--host HOSTS", "Hostname names to process") { |hosts| options[:host] = hosts.split(',') }
+  opts.on("-o", "--owner [OWNER]", "Owner") { |owner| options[:owner] = owner }
+  opts.on("-D", "--apply", "Apply changes, overvise it's dry run") { options[:apply] = true }
+  opts.on("--debug", "Print debug info") { options[:debug] = true }
+end
+
+parser.parse!
+
+(puts parser; exit 0) unless options[:host] and ARGV.size != 0
+
+LOG = Logger.new STDOUT
+LOG.level = options[:debug] ? Logger::DEBUG : Logger::INFO
+LOG.formatter = proc do |severity, datetime, progname, msg|
+  "#{SEVERITY_MAP[severity]}: [#{progname}] #{msg}\n"
+end
+
+options[:host].each do |host|
+  Hiera.add_certs host, ARGV, options[:owner], options[:apply]
+end
